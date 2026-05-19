@@ -27,20 +27,39 @@ if any(row_sum_data <= 0)
 end
 
 d = row_sum_data .^ -alpha;
-L = data .* (d*d.');
 
-row_sum_L = sum(L, 2);
-if any(row_sum_L <= 0)
+% We now do the following calculations:
+% D = diag(d); 
+% L = D * data * D; % have to check that row sums of L are positive (note 1)
+% W = L * ones(width(L), 1); % row-wise degree of L
+% solve EVP: W^{-1}Lv = kv (k is eigenvalue and v is eigenvector)
+
+% In a more efficient/stable manner: 
+% First, change to generalised EVP:
+% Lv = kWv (MATLAB can solve this easily and nicely)
+% D * data * D * v = kWv
+% data * D * v = kWD^{-1}v (commutes as W and D are diagonal)
+% data * u = kWD^{-2}u (where u = Dv, and W and D are nice and diagonal)
+% We can even calulate W (diag matrix) without explicitly calculating L!
+
+% note 1: 
+% L = D * data * D  -->  L * 1 = d .* (data * d)
+% row_sum_L = d .* (data * d);
+% has the same sign as d .* (data * d) ./ d.^2 = (data * d) ./ d; 
+
+
+% 1. Compute M_diag directly: (data * d) ./ d
+% This combines the row sum calculation and the D^2 division
+RHS = (data * d) ./ d;
+
+% Check the row sums (see note 1)
+if any(RHS <= 0)
     error('diffusion_mapping:zeroRowSum', ...
           'Normalized affinity has rows that sum to zero or below.');
 end
 
-% L is assumed to be symmetric (see line 281 in GradientMaps.m)
-% We can normalise for degree and solve the generalised eigenvalue problem
-% Lv = kDv (where k is the eigenvalue and v is the eigenvector).
-% Don't need to use any hacks or tricks, including to fix the eigenvectors. 
-% Keeps everything symmetric and nice. 
-[eigvec, eigval] = eig(L, diag(row_sum_L), 'vector'); 
+[eigvec_u, eigval] = eig(data, diag(RHS), 'vector'); 
+eigvec = bsxfun(@rdivide, eigvec_u, d); %Recover v = D^-1 * u
 
 % Sort eigenvectors and values. eig(Ms,'vector') already returns reals,
 % but cast defensively in case of borderline 1e-300 imaginary residue.
