@@ -18,6 +18,14 @@ if exist('random_state','var')
     rng(random_state);
 end
 
+% In future, data can be a function instead of a matrix. This would be useful if
+% data is a low rank matrix (eg derived from a 1200 timepoint timeseries where
+% there are 32k variables). Then, the large matrix `data` does not have to be
+% passed: only a function which can compute data*x. This could be an approach
+% which directly makes use of the fact that data is low rank. 
+% If this approach is done, replace row_sum_data with something like
+% row_sum_data = data * ones(height(data), 1);
+
 % Reject zero-sum rows up front: ^-alpha or ^-0.5 of a zero row sum
 % silently produces Inf/NaN and corrupts the embedding.
 row_sum_data = sum(data, 2);
@@ -59,7 +67,7 @@ end
 RHS = spdiags(RHS, 0, length(RHS), length(RHS)); 
 
 % Only solve for the number of components that we actually need
-n_available = length(row_sum_data)-1;
+n_available = length(d)-1;
 if n_components > n_available
     warning(['You requested %d components but only %d are available; ' ...
              'returning all available components.'], ...
@@ -67,9 +75,13 @@ if n_components > n_available
     n_components = n_available;
 end
 
+% Main: solve GEVP
 % get components with largest algebraic  eigenvalue
 % get one more component as first will be discarded 
-[eigvec_u, eigval] = eigs(data, RHS, n_components+1, 'la');
+% configure eigs for optimal performance and stability
+% opts.issym = true;  % Forces symmetric solver (use for function input)
+opts.isreal = true; % Expect real matrices
+[eigvec_u, eigval] = eigs(data, RHS, n_components+1, 'la', opts);
 eigvec = bsxfun(@rdivide, eigvec_u, d); % Recover v = D^-1 * u
 eigval = diag(eigval);
 
