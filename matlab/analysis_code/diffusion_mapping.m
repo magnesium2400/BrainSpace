@@ -58,8 +58,10 @@ if any(RHS <= 0)
           'Normalized affinity has rows that sum to zero or below.');
 end
 
-[eigvec_u, eigval] = eig(data, diag(RHS), 'vector'); 
+RHS = spdiags(RHS, 0, length(RHS), length(RHS)); 
+[eigvec_u, eigval] = eigs(data, RHS, length(RHS)); 
 eigvec = bsxfun(@rdivide, eigvec_u, d); %Recover v = D^-1 * u
+eigval = diag(eigval); 
 
 % Sort eigenvectors and values. eig(Ms,'vector') already returns reals,
 % but cast defensively in case of borderline 1e-300 imaginary residue.
